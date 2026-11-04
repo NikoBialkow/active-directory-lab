@@ -33,8 +33,8 @@
 | Client OS | Windows 11 Enterprise |
 | Active Directory Domain | corp.example.test |
 | NetBIOS Domain | CORM |
-| Domain Controller IP | 10.20.30.10 |
-| Client IP | 10.20.30.101 |
+| Domain Controller IP | 10.20.XX.XX |
+| Client IP | 10.20.XX.XX |
 | Virtualization | Oracle VirtualBox |
 
 **Tools used:**
