@@ -34,8 +34,8 @@
 | Client OS | Windows 11 Enterprise |
 | Active Directory Domain | corp.example.test |
 | NetBIOS Domain | CORM |
-| Domain Controller IP | 10.20.30.10 |
-| Client IP | 10.20.30.101 |
+| Domain Controller IP | 10.20.XX.XX |
+| Client IP | 10.20.XX.XX |
 | Internal Network | IT_SUPPORT_LAN |
 | Virtualization | Oracle VirtualBox |
 
@@ -69,15 +69,15 @@ The baseline configuration used the domain controller as the workstation's inter
 
 | Parameter | Value |
 |---|---|
-| IP Address | 10.20.30.101 |
+| IP Address | 10.20.XX.XX |
 | Subnet Mask | 255.255.255.0 |
-| DNS Server | 10.20.30.10 |
+| DNS Server | 10.20.XX.XX |
 | Default Gateway (Internal NIC) | None |
 
 DNS resolution was tested using:
 
 ```powershell
-Resolve-DnsName dc01.corp.example.test -Server 10.20.30.10
+Resolve-DnsName dc01.corp.example.test -Server 10.20.XX.XX
 ```
 
 This test established a baseline for comparing DNS behavior before and after the simulated failure.
@@ -102,7 +102,7 @@ After identifying the internal network adapter, its DNS configuration was modifi
 **Example using the interface alias:**
 
 ```powershell
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet 2" -ServerAddresses 192.0.2.53
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 192.0.2.53
 ```
 
 *The interface alias depends on the workstation's actual network configuration.*
@@ -134,13 +134,13 @@ ipconfig /all
 Connectivity to the domain controller was tested using:
 
 ```powershell
-ping 10.20.30.10
+ping 10.20.XX.XX
 ```
 
 An additional TCP connectivity test could be used to verify access to the LDAP service:
 
 ```powershell
-Test-NetConnection 10.20.30.10 -Port 389
+Test-NetConnection 10.20.XX.XX -Port 389
 ```
 
 **Diagnostic reasoning:**
@@ -186,13 +186,13 @@ Domain controller discovery can depend on cached information, so test results sh
 To determine whether the problem was caused by the DNS service itself or by the client's configuration, a DNS query was directed explicitly to the correct domain DNS server.
 
 ```powershell
-Resolve-DnsName dc01.corp.example.test -Server 10.20.30.10
+Resolve-DnsName dc01.corp.example.test -Server 10.20.XX.XX
 ```
 
 An additional DNS SRV record query was used to inspect Active Directory service discovery:
 
 ```powershell
-Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.corp.example.test -Server 10.20.30.10
+Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.corp.example.test -Server 10.20.XX.XX
 ```
 
 **Diagnostic reasoning:**
@@ -210,7 +210,7 @@ Comparing normal DNS queries with queries sent directly to `10.20.30.10` helps i
 The incorrect DNS setting was corrected by restoring the domain controller as the preferred DNS server on the workstation's internal network adapter.
 
 ```powershell
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet 2" -ServerAddresses 10.20.30.10
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses 10.20.XX.XX
 ```
 
 The DNS cache was cleared again:
