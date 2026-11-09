@@ -17,10 +17,10 @@ The objective was to deploy a dedicated Windows File Server, configure SMB and N
 
 The exercise was performed in an isolated Active Directory home lab.
 
-**Key technologies:**
+**Technologies used:**
 - Windows Server 2022 Server Core
-- Windows 11
-- Active Directory Domain Services (AD DS)
+- Windows 11 Enterprise
+- Active Directory Domain Services
 - SMB File Sharing
 - NTFS Permissions
 - PowerShell
@@ -42,7 +42,7 @@ The exercise was performed in an isolated Active Directory home lab.
 
 Authorized HR employees should be able to access and modify files within the HR network share.
 
-**Actual behavior during the incident:**
+**Actual behavior:**
 
 Access to the shared folder was denied after an intentional SMB permissions misconfiguration.
 
@@ -68,28 +68,58 @@ Access to the shared folder was denied after an intentional SMB permissions misc
 
 The File Server was deployed as a separate domain-joined machine rather than hosting shared files directly on the Domain Controller.
 
-This architecture provides separation between identity management and file storage services.
+This architecture separates identity management from file storage services and provides experience managing multiple Windows servers.
 
-## 4. File Server Deployment
+### Virtual Machine Configuration
 
-A new virtual machine named `IT-FS01` was created using Windows Server 2022 Server Core.
+The FS01 virtual machine was created with:
 
-The server was configured with:
+- 2 virtual CPUs
+- 4 GB RAM
+- 50 GB system disk
+- 30 GB additional data disk
+- Internal Network adapter
+- NAT adapter
 
-- A dedicated system disk.
-- A separate data disk.
-- An internal network adapter connected to `IT_SUPPORT_LAN`.
-- An additional NAT adapter for internet connectivity.
+![FS01 Virtual Machine Configuration](screenshots/00-file-server-vm-configuration.png)
 
-The computer was renamed to `FS01` and configured with the internal IPv4 address `10.20.30.20/24`, using the Domain Controller at `10.20.30.10` for DNS resolution.
+## 4. Initial File Server Configuration
 
-### Network and Domain Verification
+Windows Server 2022 Server Core was installed on FS01.
 
-The following commands were used:
+The system was configured using SConfig and PowerShell.
+
+The computer was renamed to `FS01`, and remote management was enabled.
+
+![FS01 Initial Configuration](screenshots/01-fs01-initial-configuration.png)
+
+### Network Configuration
+
+The internal network adapter was configured with:
+
+| Setting | Value |
+|---|---|
+| IPv4 Address | 10.20.30.20 |
+| Subnet Mask | 255.255.255.0 |
+| DNS Server | 10.20.30.10 |
+| Default Gateway | None on the internal adapter |
+
+Network settings were checked using:
 
 ```powershell
+Get-NetAdapter
 Get-NetIPConfiguration
+```
 
+The internal network uses the Domain Controller for DNS resolution.
+
+![FS01 Network Configuration](screenshots/02-fs01-network-configuration.png)
+
+### Connectivity Verification
+
+Before joining the domain, network connectivity and DNS resolution were tested:
+
+```powershell
 Test-Connection 10.20.30.10 -Count 4
 
 Resolve-DnsName dc01.corp.example.test
@@ -97,9 +127,13 @@ Resolve-DnsName dc01.corp.example.test
 Resolve-DnsName -Type SRV _ldap._tcp.dc._msdcs.corp.example.test
 ```
 
-These checks were used to validate IP connectivity, DNS resolution, and Active Directory service discovery.
+These commands validate connectivity to the Domain Controller, hostname resolution, and Active Directory service discovery.
 
-The server was joined to the existing domain:
+![FS01 Connectivity Tests](screenshots/03-fs01-connectivity-tests.png)
+
+## 5. Active Directory Domain Join
+
+FS01 was joined to the existing Active Directory domain using PowerShell:
 
 ```powershell
 Add-Computer -DomainName "corp.example.test" `
@@ -107,7 +141,7 @@ Add-Computer -DomainName "corp.example.test" `
     -Restart
 ```
 
-Domain membership was checked using:
+After restarting, domain membership and the secure channel were verified:
 
 ```powershell
 Get-CimInstance Win32_ComputerSystem |
@@ -116,23 +150,19 @@ Get-CimInstance Win32_ComputerSystem |
 Test-ComputerSecureChannel
 ```
 
-### Evidence
+The configuration confirmed that FS01 was operating as a domain-joined member server.
 
-![FS01 Hostname](screenshots/01-fs01-hostname.png)
+![FS01 Domain Join](screenshots/04-fs01-domain-join.png)
 
-![FS01 Network Configuration](screenshots/02-fs01-network-configuration.png)
+## 6. Data Disk Configuration
 
-![Connectivity Tests](screenshots/03-fs01-connectivity-tests.png)
+A dedicated data disk was configured for shared departmental resources.
 
-![Domain Join Verification](screenshots/04-fs01-domain-join.png)
+The disk was initialized, partitioned, and formatted using NTFS.
 
-## 5. File Server Configuration
+The final drive letter assigned to the data volume was `Y:`.
 
-### Data Drive
-
-A separate data volume was prepared using NTFS and assigned drive letter `Y:`.
-
-Disk and volume information was checked with:
+Disk information was inspected using:
 
 ```powershell
 Get-Disk
@@ -140,25 +170,33 @@ Get-Partition
 Get-Volume
 ```
 
-The data drive was verified using:
+The data volume was verified using:
 
 ```powershell
 Get-Volume -DriveLetter Y
 ```
 
-![File Server Data Disk](screenshots/05-fs01-data-disk.png)
+Separating shared company data from the operating system provides a clearer storage structure and simplifies future administration.
 
-### File Server Role
+![FS01 Data Disk](screenshots/05-fs01-data-disk.png)
 
-The Windows File Server role was checked and installed if required:
+## 7. File Server Role Installation
+
+The Windows File Server role was configured on FS01.
+
+The feature was checked using:
 
 ```powershell
 Get-WindowsFeature FS-FileServer
+```
 
+The installation command was:
+
+```powershell
 Install-WindowsFeature FS-FileServer
 ```
 
-The role and Server service were verified using:
+The role and SMB Server service were verified using:
 
 ```powershell
 Get-WindowsFeature FS-FileServer
@@ -170,9 +208,9 @@ The `LanmanServer` service provides server-side SMB file sharing functionality.
 
 ![File Server Role](screenshots/06-fs01-file-server-role.png)
 
-## 6. Shared Folder Structure
+## 8. Departmental Folder Structure
 
-A basic departmental folder structure was created on the data drive:
+A basic company folder structure was created on the Y: drive.
 
 ```text
 Y:\
@@ -194,21 +232,21 @@ New-Item -Path "Y:\Shares\Sales" -ItemType Directory
 New-Item -Path "Y:\Shares\IT" -ItemType Directory
 ```
 
-The directory structure was verified using:
+The folder structure was inspected using:
 
 ```powershell
 Get-ChildItem Y:\Shares
 ```
 
-![Folder Structure](screenshots/07-fs01-folder-structure.png)
+![FS01 Folder Structure](screenshots/07-fs01-folder-structure.png)
 
-## 7. SMB and NTFS Permissions
+## 9. SMB and NTFS Permissions
 
-The HR folder was configured to use Active Directory security group-based access control.
+The HR folder was configured using Active Directory security group-based access control.
 
 ### NTFS Permissions
 
-The intended NTFS permissions were:
+The following permissions were configured:
 
 | Security Principal | Permission |
 |---|---|
@@ -216,7 +254,7 @@ The intended NTFS permissions were:
 | NT AUTHORITY\SYSTEM | Full Control |
 | CORM\GG_HR | Modify |
 
-The permissions were configured using:
+The folder permissions were configured using:
 
 ```powershell
 icacls "Y:\Shares\HR" /inheritance:r
@@ -227,15 +265,15 @@ icacls "Y:\Shares\HR" /grant:r `
     "CORM\GG_HR:(OI)(CI)M"
 ```
 
-The parameters have the following meanings:
+**Parameter explanation:**
 
-- `/inheritance:r` — disables inheritance and removes inherited permission entries.
-- `(OI)` — Object Inherit, applying permissions to files.
-- `(CI)` — Container Inherit, applying permissions to subfolders.
+- `/inheritance:r` — removes inherited permission entries.
+- `(OI)` — applies permissions to child files.
+- `(CI)` — applies permissions to child folders.
 - `F` — Full Control.
 - `M` — Modify.
 
-The resulting permissions were inspected using:
+The permissions were inspected using:
 
 ```powershell
 icacls "Y:\Shares\HR"
@@ -243,7 +281,7 @@ icacls "Y:\Shares\HR"
 
 ### SMB Share Permissions
 
-An SMB share named `HR` was configured:
+The HR network share was created using:
 
 ```powershell
 New-SmbShare -Name "HR" `
@@ -252,7 +290,7 @@ New-SmbShare -Name "HR" `
     -FullAccess "CORM\Domain Admins"
 ```
 
-The configured share permissions were inspected using:
+Share settings were inspected using:
 
 ```powershell
 Get-SmbShare -Name "HR"
@@ -260,62 +298,64 @@ Get-SmbShare -Name "HR"
 Get-SmbShareAccess -Name "HR"
 ```
 
-![SMB Share Permissions](screenshots/08-fs01-smb-permissions.png)
+This configuration allows authorized HR users to modify files while retaining administrative access.
 
-## 8. Baseline Access Verification
+![SMB Permissions](screenshots/08-fs01-smb-permissions.png)
 
-Before introducing the incident, the shared folder was tested from the domain-joined Windows 11 client.
+## 10. Baseline Access Verification
 
-The test was performed using the domain account:
+Before introducing the incident, access to the shared folder was tested using CLIENT01.
+
+The test account was:
 
 `CORM\anna.kowalska`
 
-The network path was:
+The network location was:
 
 ```text
 \\FS01\HR
 ```
 
-The user was able to access the folder and create a test file, confirming functional access before the simulated incident.
+The HR user successfully accessed the shared folder and created a test file.
 
-The baseline established that the share was available and accessible to an authorized HR user.
+This confirmed that the share was functioning before the intentional permissions misconfiguration.
 
-![Working HR Share](screenshots/09-hr-share-working-baseline.png)
+![Working HR Share Baseline](screenshots/09-hr-share-working-baseline.png)
 
-## 9. Incident Simulation
+## 11. Incident Simulation
 
-To reproduce the reported issue, SMB share permissions were intentionally modified on FS01.
+To reproduce the reported problem, an explicit Deny entry was intentionally introduced at the SMB share level.
 
-The original share permissions were inspected:
+The original permissions were checked:
 
 ```powershell
 Get-SmbShareAccess -Name "HR"
 ```
 
-An explicit Deny entry was introduced for the HR security group:
+The following command introduced the restriction:
 
 ```powershell
 Block-SmbShareAccess -Name "HR" `
     -AccountName "CORM\GG_HR"
 ```
 
-The updated permissions were checked:
+The permissions were inspected again:
 
 ```powershell
 Get-SmbShareAccess -Name "HR"
 ```
 
-This configuration introduced an explicit SMB share-level restriction affecting members of the HR group.
+The new Deny entry affected members of the HR security group.
 
-Even when NTFS permissions allow access, an explicit Deny at the SMB share level can prevent network access.
+This demonstrated how share-level permissions can prevent network access even when NTFS permissions permit modification.
 
-![SMB Deny Configuration](screenshots/10-hr-share-access-denied-config.png)
+![SMB Access Denied Configuration](screenshots/10-hr-share-access-denied-config.png)
 
-## 10. Reproducing the User Issue
+## 12. Reproducing the Access Denied Error
 
-The issue was tested on CLIENT01 using the domain account `CORM\anna.kowalska`.
+The incident was reproduced from CLIENT01 using the affected domain account.
 
-The existing SMB connection was disconnected using:
+The existing SMB connection was disconnected:
 
 ```cmd
 net use \\FS01\HR /delete
@@ -327,23 +367,17 @@ The user then attempted to access:
 \\FS01\HR
 ```
 
-Windows displayed an access-denied error, reproducing the simulated helpdesk incident.
+Windows displayed an access-denied error, confirming that the simulated incident could be reproduced.
 
-![Access Denied Error](screenshots/11-hr-access-denied-error.png)
+![HR Access Denied Error](screenshots/11-hr-access-denied-error.png)
 
-## 11. Troubleshooting and Diagnostics
+## 13. Troubleshooting and Diagnostics
 
-The investigation focused on identifying whether the problem was caused by:
-
-- Incorrect user identity or group membership.
-- Network connectivity failure.
-- SMB service unavailability.
-- Incorrect SMB share permissions.
-- Incorrect NTFS permissions.
+The investigation focused on distinguishing between identity, connectivity, SMB permissions, and NTFS permissions.
 
 ### Step 1 — Verify User Identity
 
-On CLIENT01:
+The following commands were executed on CLIENT01:
 
 ```cmd
 whoami
@@ -351,63 +385,65 @@ whoami
 whoami /groups
 ```
 
-These commands were used to inspect the logged-in identity and security group membership.
+These commands identify the currently authenticated user and display security group membership.
+
+They help determine whether the affected account belongs to the expected Active Directory group.
 
 ### Step 2 — Verify SMB Connectivity
 
-On CLIENT01, PowerShell was used to test TCP connectivity:
+PowerShell was used to test connectivity to TCP port 445:
 
 ```powershell
 Test-NetConnection FS01 -Port 445
 ```
 
-TCP port 445 is used by SMB.
+Port 445 is used for SMB communication.
 
-A successful TCP connection indicates that the SMB service is reachable over the network, but it does not establish that the user has permission to access the share.
+A successful connection indicates that the SMB service is reachable over TCP, but it does not guarantee permission to access a specific folder.
 
 ![User and SMB Diagnostics](screenshots/12-user-and-smb-diagnostics.png)
 
 ### Step 3 — Compare Share and NTFS Permissions
 
-On FS01, SMB permissions were checked using:
+On FS01, SMB permissions were inspected:
 
 ```powershell
 Get-SmbShareAccess -Name "HR"
 ```
 
-NTFS permissions were inspected using:
+NTFS permissions were checked separately:
 
 ```powershell
 icacls "Y:\Shares\HR"
 ```
 
-The comparison identified the deliberately introduced SMB share-level Deny entry.
+The comparison identified a deliberately introduced SMB Deny entry affecting `CORM\GG_HR`.
 
-The NTFS configuration allowed the HR group to modify folder contents, while the SMB share restriction prevented network access.
+The HR group retained its intended NTFS Modify permissions, but the SMB share-level restriction prevented network access.
 
 ![Share vs NTFS Diagnostics](screenshots/13-share-vs-ntfs-diagnostics.png)
 
-## 12. Root Cause Analysis
+## 14. Root Cause Analysis
 
 **Root Cause: Incorrect SMB Share Permissions**
 
-The incident was caused by an explicit Deny entry assigned to the Active Directory security group `CORM\GG_HR` at the SMB share level.
+The incident was caused by an explicit Deny entry assigned to the Active Directory security group `CORM\GG_HR`.
 
-The affected user belonged to the HR group, and therefore the share-level restriction prevented access to the network folder.
+The affected user belonged to this group, so the configured restriction prevented access to the network share.
 
 The NTFS permissions were not the cause of the incident.
 
 ### Technical Explanation
 
-Windows evaluates both SMB share permissions and NTFS permissions when a network resource is accessed.
+When users access a shared folder over the network, Windows evaluates both SMB Share Permissions and NTFS Permissions.
 
-The effective access is restricted by the combined permission configuration.
+The user's effective access is limited by the combined permission configuration.
 
-A user may have NTFS Modify permissions and still be unable to access a folder over SMB if the share permissions deny access.
+Even if NTFS permissions allow modifying files, access may still be denied by the SMB share permissions.
 
-This distinction was central to the troubleshooting process.
+This distinction was central to identifying the root cause.
 
-## 13. Resolution
+## 15. Resolution
 
 The incorrectly configured SMB Deny entry was removed using:
 
@@ -416,21 +452,21 @@ Unblock-SmbShareAccess -Name "HR" `
     -AccountName "CORM\GG_HR"
 ```
 
-The share permissions were inspected again:
+The permissions were then inspected again:
 
 ```powershell
 Get-SmbShareAccess -Name "HR"
 ```
 
-The corrective action restored the intended share access without unnecessarily modifying the existing NTFS permissions.
+The corrective action removed the intentionally introduced share-level restriction without modifying the existing NTFS permissions.
 
-![Restored SMB Permissions](screenshots/14-hr-permissions-restored.png)
+![HR Permissions Restored](screenshots/14-hr-permissions-restored.png)
 
-## 14. Final Validation
+## 16. Final Validation
 
-After the permissions were restored, the network connection was refreshed on CLIENT01.
+After restoring the permissions, the network connection was refreshed on CLIENT01.
 
-The user accessed:
+The affected user accessed:
 
 ```text
 \\FS01\HR
@@ -438,61 +474,60 @@ The user accessed:
 
 The following operations were tested:
 
-1. Opening the HR shared folder.
+1. Opening the shared folder.
 2. Creating a test file.
 3. Editing and saving file contents.
 4. Deleting the test file.
 
-The successful operations confirmed that the HR user's access had been restored.
+These operations confirmed that access had been restored and the user could modify files within the HR share.
 
-![Access Restored Validation](screenshots/15-hr-access-restored-validation.png)
+![HR Access Restored Validation](screenshots/15-hr-access-restored-validation.png)
 
-**Final Status: Resolved**
+**Final Ticket Status: Resolved**
 
-## 15. Lessons Learned
+## 17. Lessons Learned
 
 ### SMB Share vs NTFS Permissions
 
-Share permissions and NTFS permissions serve different purposes and must be evaluated together when troubleshooting network folder access.
+Both share-level and filesystem-level permissions must be considered when troubleshooting network folder access.
 
-### Group-Based Access Control
+### Active Directory Group Management
 
-Using Active Directory security groups simplifies permission management and allows administrators to assign access based on organizational roles.
+Using security groups provides centralized access management and simplifies permission assignments.
 
-### Importance of Baseline Testing
+### Baseline Verification
 
-Verifying correct functionality before introducing a failure helps distinguish an existing configuration problem from the simulated incident.
+Testing a service before introducing a simulated fault establishes a reliable reference point for troubleshooting.
 
 ### Structured Troubleshooting
 
-A systematic investigation should separate identity, network connectivity, service availability, and authorization issues.
+Checking user identity, connectivity, and access permissions separately helps isolate the root cause of access problems.
 
 ### Principle of Least Privilege
 
-Users should receive only the permissions required to perform their job responsibilities.
+Users should receive only the permissions necessary to perform their responsibilities.
 
-### Server Core Administration
+### Windows Server Core Administration
 
-Windows Server Core can be configured and administered using PowerShell without a full graphical desktop environment.
+Windows Server Core can be deployed, configured, and managed using PowerShell without a graphical desktop environment.
 
-This project provided additional practical experience in command-line server administration.
+## 18. Skills Demonstrated
 
-## 16. Skills Demonstrated
-
-- Windows Server 2022 Core administration
-- Active Directory domain integration
+- Windows Server 2022 Server Core administration
+- Active Directory Domain Join
 - Windows File Server deployment
-- SMB share configuration
-- NTFS access control
-- Active Directory security group management
+- SMB configuration and troubleshooting
+- NTFS permission management
+- Active Directory security groups
 - PowerShell administration
-- Windows client troubleshooting
-- Network and DNS validation
+- TCP/IP and DNS troubleshooting
+- Windows client support
+- Access Denied troubleshooting
 - Root cause analysis
-- Incident simulation and resolution
+- Incident simulation and recovery
 - Technical documentation
 
-## 17. Project Structure
+## 19. Project Structure
 
 ```text
 HD-005-Shared-Folder-Access-Denied/
@@ -500,7 +535,8 @@ HD-005-Shared-Folder-Access-Denied/
 ├── README.md
 │
 └── screenshots/
-    ├── 01-fs01-hostname.png
+    ├── 00-file-server-vm-configuration.png
+    ├── 01-fs01-initial-configuration.png
     ├── 02-fs01-network-configuration.png
     ├── 03-fs01-connectivity-tests.png
     ├── 04-fs01-domain-join.png
@@ -521,14 +557,14 @@ HD-005-Shared-Folder-Access-Denied/
 
 ## Disclaimer
 
-This project was performed in a controlled, isolated home laboratory using virtual machines and fictional employee accounts.
+This project was completed in a controlled, isolated home laboratory using virtual machines and fictional employee accounts.
 
-The incident was intentionally simulated for educational purposes.
+The incident was intentionally simulated for educational and professional development purposes.
 
-It does not represent a production environment or an actual corporate security incident.
+It does not represent a production environment or an actual corporate incident.
 
 ---
 
-**Project Repository:** [NikoBialkow — GitHub](https://github.com/NikoBialkow)
+**GitHub:** [NikoBialkow](https://github.com/NikoBialkow)
 
 **Focus:** IT Support | Windows Server | Active Directory | Troubleshooting
