@@ -517,31 +517,6 @@ The disabled Drive Maps preference item was the configuration-level root cause.
 - Troubleshooting and remediation
 - Technical documentation
 
-## 20. Project Structure
-
-```text
-HD-006-Network-Drive-Mapping-GPO/
-│
-├── README.md
-│
-└── screenshots/
-    ├── 01-existing-hr-share.png
-    ├── 02-hr-gpo-created.png
-    ├── 03-drive-mapping-gpo-settings.png
-    ├── 04-gpo-scope-validation.png
-    ├── 05-drive-mapping-gpresult.png
-    ├── 06-mapped-drive-working.png
-    ├── 07-drive-access-validation.png
-    ├── 08-drive-map-disabled.png
-    ├── 09-network-drive-missing.png
-    ├── 10-smb-connectivity-validation.png
-    ├── 11-gpresult-troubleshooting.png
-    ├── 12-group-policy-events.png
-    ├── 13-root-cause-disabled-drive-map.png
-    ├── 14-drive-map-enabled.png
-    └── 15-network-drive-restored.png
-```
-
 ---
 
 ## Disclaimer
